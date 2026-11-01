@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    background-color: #03060d;
+  }
+
+  body {
+    @apply font-sans text-ink-100 antialiased;
+    min-height: 100vh;
+    background-color: #03060d;
+    background-image: radial-gradient(ellipse 70% 45% at 50% -8%, rgba(34, 211, 255, 0.16), transparent 70%),
+      radial-gradient(ellipse 50% 40% at 100% 100%, rgba(245, 184, 46, 0.07), transparent 70%),
+      linear-gradient(rgba(34, 211, 255, 0.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(34, 211, 255, 0.045) 1px, transparent 1px);
+    background-size: auto, auto, 48px 48px, 48px 48px;
+    background-attachment: fixed;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-display tracking-wide;
+  }
+
+  ::selection {
+    background: rgba(34, 211, 255, 0.35);
+    color: #f2f8ff;
+  }
+}
+
+@layer components {
+  .card {
+    @apply relative rounded-2xl border border-neon-400/20 bg-night-850/85 shadow-card backdrop-blur;
+    background-image: linear-gradient(160deg, rgba(34, 211, 255, 0.07), transparent 45%);
+  }
+
+  .card::before,
+  .card::after {
+    @apply pointer-events-none absolute h-4 w-4 border-neon-400;
+    content: '';
+  }
+
+  .card::before {
+    @apply -left-px -top-px border-l-2 border-t-2 rounded-tl-2xl;
+  }
+
+  .card::after {
+    @apply -bottom-px -right-px border-b-2 border-r-2 rounded-br-2xl;
+  }
+
+  .input {
+    @apply w-full rounded-xl border border-white/10 bg-night-950/70 px-4 py-3 text-ink-50 placeholder:text-ink-500 transition focus:border-neon-400 focus:outline-none focus:ring-2 focus:ring-neon-500/40;
+  }
+
+  .label {
+    @apply mb-1.5 block text-sm font-medium text-ink-200;
+  }
+}

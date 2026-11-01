@@ -1,0 +1,13 @@
+{
+  "projectId": "72552759",
+  "functions": {
+    "paypal-checkout": {
+      "hasChanged": false,
+      "hash": "aa7da0a03ce4ab5f66489c104ef23e69add97ced4f7d3cb507e1d701de65ea99"
+    },
+    "roast-chat": {
+      "hasChanged": false,
+      "hash": "593afd95e5f633b80c533e3dd30b01ee8f304191fbd71581401f0b3e34968115"
+    }
+  }
+}
