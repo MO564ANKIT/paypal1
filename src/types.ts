@@ -54,6 +54,7 @@ export interface PlayerStats {
   budgetSet: boolean;
   simulations: number;
   cartsAbandoned: number;
+  purchasesCompleted: number;
   purchasesSkipped: number;
   unlockedMonsters: number;
   totalMonsters: number;

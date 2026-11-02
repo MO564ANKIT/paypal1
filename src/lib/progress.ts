@@ -33,6 +33,7 @@ export function computeStats(state: GameState, todayKey: string): PlayerStats {
     budgetSet: state.monthlyBudgetPaise !== null,
     simulations: countEvents('simulation'),
     cartsAbandoned: countEvents('cart_abandoned'),
+    purchasesCompleted: countEvents('purchase_completed'),
     purchasesSkipped: countEvents('purchase_skipped'),
     unlockedMonsters: MONSTER_IDS.filter((id) => state.monsters[id].unlockedAt !== null).length,
     totalMonsters: MONSTER_IDS.length,

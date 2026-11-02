@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { Crown, FlaskConical, Flame, Ghost, PiggyBank, Receipt, ScrollText, Sparkles, Swords } from 'lucide-react';
+import { Crown, FlaskConical, Flame, Ghost, PiggyBank, Receipt, ScrollText, ShoppingBag, Sparkles, Swords } from 'lucide-react';
 import type { PlayerStats } from '@/types';
 
 export interface AchievementDefinition {
@@ -73,5 +73,12 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     description: 'Abandon a cart on purpose.',
     icon: Ghost,
     check: (s) => s.cartsAbandoned >= 1,
+  },
+  {
+    id: 'first-loot',
+    title: 'First Loot',
+    description: 'Complete your first Loot Shop checkout.',
+    icon: ShoppingBag,
+    check: (s) => s.purchasesCompleted >= 1,
   },
 ];
