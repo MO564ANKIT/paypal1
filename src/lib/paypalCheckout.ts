@@ -1,24 +1,30 @@
 import { LOOT_BY_ID } from '@/lib/lootCatalogue';
+import { supabase } from '@/lib/supabase';
 
 const CHECKOUT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/paypal-checkout`;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export type CaptureResult =
   | { status: 'completed'; orderId: string; itemIds: string[]; amountCents: number }
-  | { status: 'failed'; orderId: string; message: string };
+  | { status: 'failed'; orderId: string; message: string }
+  | { status: 'pending'; orderId: string; message: string };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 async function postCheckout(body: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+  if (!accessToken) throw new Error('Sign in to continue checkout.');
+
   let response: Response;
   try {
     response = await fetch(CHECKOUT_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${ANON_KEY}`,
+        Authorization: `Bearer ${accessToken}`,
         apikey: ANON_KEY,
       },
       body: JSON.stringify(body),
@@ -57,6 +63,13 @@ export async function capturePaypalOrder(orderId: string): Promise<CaptureResult
     typeof data.amountCents === 'number'
   ) {
     return { status: 'completed', orderId: data.orderId, itemIds, amountCents: data.amountCents };
+  }
+  if (data.status === 'pending') {
+    return {
+      status: 'pending',
+      orderId,
+      message: typeof data.message === 'string' ? data.message : 'Your payment is still being confirmed.',
+    };
   }
   return {
     status: 'failed',

@@ -3,11 +3,11 @@
   "functions": {
     "paypal-checkout": {
       "hasChanged": false,
-      "hash": "aa7da0a03ce4ab5f66489c104ef23e69add97ced4f7d3cb507e1d701de65ea99"
+      "hash": "be55af5e2997874c5059515cffabf1f1d7b195d2f316c80b3a27a54f0f68ed1a"
     },
     "roast-chat": {
       "hasChanged": false,
-      "hash": "593afd95e5f633b80c533e3dd30b01ee8f304191fbd71581401f0b3e34968115"
+      "hash": "801bc7836b4e683cf10d01e7ba89964d0217bfbe27de1633ef4fb0927e06b049"
     }
   }
 }

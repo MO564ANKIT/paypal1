@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { buildBudgetFacts, isDateKey, readSavedBudgetState } from "./budgetFacts.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -53,10 +54,6 @@ function isHistory(value: unknown): value is HistoryItem[] {
   );
 }
 
-function isFacts(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((fact) => typeof fact === "string");
-}
-
 function buildRequest(personality: string, message: string, facts: string[], history: HistoryItem[]) {
   const system = [PERSONA_STYLE[personality], RULES].join("\n\n");
   const contents = [
@@ -93,7 +90,7 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => null);
     const personality = body?.personality;
     const message = body?.message;
-    const facts = body?.facts ?? [];
+    const today = body?.today;
     const history = body?.history ?? [];
 
     if (typeof personality !== "string" || !(personality in PERSONA_STYLE)) {
@@ -102,7 +99,7 @@ Deno.serve(async (req: Request) => {
     if (typeof message !== "string" || message.trim().length === 0 || message.length > MAX_MESSAGE_LENGTH) {
       return json({ error: "Your message must be between 1 and 200 characters." }, 400);
     }
-    if (!isFacts(facts) || !isHistory(history)) {
+    if (!isDateKey(today) || !isHistory(history)) {
       return json({ error: "The roast request was not in the expected shape." }, 400);
     }
 
@@ -129,6 +126,15 @@ Deno.serve(async (req: Request) => {
     const { error: insertError } = await admin.from("roast_requests").insert({ user_id: userId });
     if (insertError) throw insertError;
 
+    const { data: saveRow, error: saveError } = await admin
+      .from("player_saves")
+      .select("state")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (saveError) throw saveError;
+    const savedState = readSavedBudgetState(saveRow?.state);
+    const facts = savedState ? buildBudgetFacts(savedState, message.trim(), today) : [];
+
     const apiKey = Deno.env.get("GEMINI_API_KEY");
     if (!apiKey) {
       return json({ error: "The AI roaster is not set up yet." }, 503);
@@ -144,7 +150,7 @@ Deno.serve(async (req: Request) => {
     const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!response.ok || typeof reply !== "string" || reply.trim().length === 0) {
-      console.error("roast-chat gemini failed", response.status, JSON.stringify(data));
+      console.error("roast-chat gemini failed", response.status);
       return json({ error: "The AI roaster is taking a break. Try again in a moment." }, 502);
     }
 

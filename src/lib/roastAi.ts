@@ -12,7 +12,7 @@ export interface RoastHistoryItem {
 export interface RoastRequest {
   personality: string;
   message: string;
-  facts: string[];
+  today: string;
   history: RoastHistoryItem[];
 }
 

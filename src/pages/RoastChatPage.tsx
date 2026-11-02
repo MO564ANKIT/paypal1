@@ -3,12 +3,8 @@ import { motion } from 'framer-motion';
 import { Bot, Info, Send, User } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
-import { monthKeyOf } from '@/lib/dates';
-import { simulatePurchase, summarizeMonth } from '@/lib/finance';
-import { computeStreak } from '@/lib/progress';
-import { buildRoastFacts, guessCategory, PERSONALITIES, type Personality } from '@/lib/roast';
+import { PERSONALITIES, type Personality } from '@/lib/roast';
 import { requestRoast } from '@/lib/roastAi';
-import { parseAmountToPaise } from '@/lib/money';
 import { useGame } from '@/state/gameContext';
 
 const MAX_MESSAGE_LENGTH = 200;
@@ -26,7 +22,7 @@ function greetingFor(personality: Personality): ChatMessage {
 }
 
 export function RoastChatPage() {
-  const { state, today } = useGame();
+  const { today } = useGame();
   const [personality, setPersonality] = useState<Personality>('softie');
   const [messages, setMessages] = useState<ChatMessage[]>(() => [greetingFor('softie')]);
   const [draft, setDraft] = useState('');
@@ -51,19 +47,6 @@ export function RoastChatPage() {
     setMessages((current) => [...current, { id, role, text }]);
   };
 
-  const buildFacts = (text: string): string[] => {
-    const summary = summarizeMonth(state, monthKeyOf(today));
-    const streak = computeStreak(state.events, today);
-    const numberMatch = text.match(/\d[\d,]*(?:\.\d{1,2})?/);
-    const amountPaise = numberMatch ? parseAmountToPaise(numberMatch[0]) : null;
-    const category = guessCategory(text);
-    const purchase =
-      amountPaise !== null && amountPaise > 0
-        ? { amountPaise, category, simulation: simulatePurchase(summary, amountPaise, category) }
-        : undefined;
-    return buildRoastFacts({ summary, streak, purchase });
-  };
-
   const sendMessage = async (text: string) => {
     const previous = messages.slice(1).slice(-HISTORY_LENGTH);
     pushMessage('user', text);
@@ -73,7 +56,7 @@ export function RoastChatPage() {
       const reply = await requestRoast({
         personality,
         message: text,
-        facts: buildFacts(text),
+        today,
         history: previous.map(({ role, text: body }) => ({ role, text: body })),
       });
       pushMessage('bot', reply);

@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import { CheckCircle2, Loader2, Undo2, XCircle } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { CheckCircle2, Loader2, RotateCw, Undo2, XCircle } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { LOOT_BY_ID } from '@/lib/lootCatalogue';
 import { formatUsdCents } from '@/lib/money';
@@ -11,7 +12,8 @@ type PaypalReturnRequest = { kind: 'return' | 'cancel'; orderId: string };
 type Outcome =
   | { phase: 'capturing' }
   | { phase: 'completed'; result: Extract<CaptureResult, { status: 'completed' }> }
-  | { phase: 'failed'; message: string }
+  | { phase: 'failed'; orderId: string; message: string }
+  | { phase: 'pending'; orderId: string; message: string }
   | { phase: 'cancelled' };
 
 function readPaypalReturn(): PaypalReturnRequest | null {
@@ -29,6 +31,31 @@ export function PaypalReturn() {
   const [outcome, setOutcome] = useState<Outcome | null>(() => (request ? { phase: 'capturing' } : null));
   const startedRef = useRef(false);
 
+  const confirm = useCallback(
+    (orderId: string) => {
+      setOutcome({ phase: 'capturing' });
+      capturePaypalOrder(orderId)
+        .then((result) => {
+          if (result.status === 'completed') {
+            recordEvent('purchase_completed');
+            setOutcome({ phase: 'completed', result });
+          } else if (result.status === 'pending') {
+            setOutcome({ phase: 'pending', orderId, message: result.message });
+          } else {
+            setOutcome({ phase: 'failed', orderId, message: result.message });
+          }
+        })
+        .catch((error: unknown) => {
+          setOutcome({
+            phase: 'failed',
+            orderId,
+            message: error instanceof Error ? error.message : 'Payment could not be confirmed. Please try again.',
+          });
+        });
+    },
+    [recordEvent],
+  );
+
   useEffect(() => {
     if (!request || startedRef.current) return;
     startedRef.current = true;
@@ -39,23 +66,8 @@ export function PaypalReturn() {
       setOutcome({ phase: 'cancelled' });
       return;
     }
-
-    capturePaypalOrder(request.orderId)
-      .then((result) => {
-        if (result.status === 'completed') {
-          recordEvent('purchase_completed');
-          setOutcome({ phase: 'completed', result });
-        } else {
-          setOutcome({ phase: 'failed', message: result.message });
-        }
-      })
-      .catch((error: unknown) => {
-        setOutcome({
-          phase: 'failed',
-          message: error instanceof Error ? error.message : 'Payment could not be confirmed. Nothing was charged.',
-        });
-      });
-  }, [request, recordEvent]);
+    confirm(request.orderId);
+  }, [request, confirm]);
 
   if (!outcome) return null;
 
@@ -96,6 +108,19 @@ export function PaypalReturn() {
         <div className="flex flex-col items-center gap-4 text-center">
           <XCircle className="h-12 w-12 text-rose-300" />
           <p role="alert" className="text-sm text-ink-200">{outcome.message}</p>
+          <Button variant="ghost" size="sm" onClick={() => confirm(outcome.orderId)}>
+            <RotateCw className="h-4 w-4" /> Try again
+          </Button>
+        </div>
+      )}
+
+      {outcome.phase === 'pending' && (
+        <div className="flex flex-col items-center gap-4 text-center">
+          <Loader2 className="h-10 w-10 animate-spin text-aqua-300" />
+          <p role="status" className="text-sm text-ink-200">{outcome.message}</p>
+          <Button variant="ghost" size="sm" onClick={() => confirm(outcome.orderId)}>
+            <RotateCw className="h-4 w-4" /> Check again
+          </Button>
         </div>
       )}
 
@@ -117,6 +142,8 @@ function modalTitle(phase: Outcome['phase']): string {
       return 'Payment confirmed';
     case 'failed':
       return 'Payment not completed';
+    case 'pending':
+      return 'Payment still processing';
     case 'cancelled':
       return 'Checkout cancelled';
   }

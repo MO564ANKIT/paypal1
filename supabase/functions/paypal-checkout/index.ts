@@ -1,4 +1,5 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { centsToValue, verifyPayment, type PaypalOrderBody } from "./verification.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -9,6 +10,8 @@ const corsHeaders = {
 const PAYPAL_API = "https://api-m.sandbox.paypal.com";
 const ORDER_ID_PATTERN = /^[A-Z0-9]{10,30}$/;
 const MAX_CART_ITEMS = 20;
+const MAX_ORDERS_PER_HOUR = 10;
+const CAPTURE_LEASE_MS = 2 * 60 * 1000;
 
 // Server-side price list: the only prices that are ever charged.
 const CATALOGUE: Record<string, { priceUsdCents: number }> = {
@@ -20,6 +23,14 @@ const CATALOGUE: Record<string, { priceUsdCents: number }> = {
   "monster-plushie": { priceUsdCents: 899 },
 };
 
+interface OrderRow {
+  paypal_order_id: string;
+  item_ids: string[];
+  amount_cents: number;
+  currency: string;
+  status: string;
+}
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -27,17 +38,18 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-function serviceClient() {
-  return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+function adminClient(): SupabaseClient {
+  return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+    auth: { persistSession: false },
+  });
 }
 
-function centsToValue(cents: number): string {
-  return (cents / 100).toFixed(2);
-}
-
-function valueToCents(value: unknown): number | null {
-  if (typeof value !== "string" || !/^\d+\.\d{2}$/.test(value)) return null;
-  return Math.round(Number(value) * 100);
+async function authenticate(req: Request, db: SupabaseClient): Promise<string | null> {
+  const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer /, "");
+  if (!token) return null;
+  const { data, error } = await db.auth.getUser(token);
+  if (error || !data.user) return null;
+  return data.user.id;
 }
 
 async function getAccessToken(): Promise<string> {
@@ -60,7 +72,14 @@ async function getAccessToken(): Promise<string> {
   return data.access_token;
 }
 
-async function createOrder(req: Request, itemIds: unknown): Promise<Response> {
+async function fetchPaypalOrder(accessToken: string, orderId: string): Promise<PaypalOrderBody | null> {
+  const response = await fetch(`${PAYPAL_API}/v2/checkout/orders/${orderId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return response.ok ? await response.json().catch(() => null) : null;
+}
+
+async function createOrder(req: Request, db: SupabaseClient, userId: string, itemIds: unknown): Promise<Response> {
   if (
     !Array.isArray(itemIds) ||
     itemIds.length === 0 ||
@@ -72,6 +91,17 @@ async function createOrder(req: Request, itemIds: unknown): Promise<Response> {
 
   const origin = req.headers.get("origin");
   if (!origin) return json({ error: "Checkout could not determine where to return you." }, 400);
+
+  const windowStart = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const { count, error: countError } = await db
+    .from("shop_orders")
+    .select("paypal_order_id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .gte("created_at", windowStart);
+  if (countError) throw countError;
+  if ((count ?? 0) >= MAX_ORDERS_PER_HOUR) {
+    return json({ error: "You have started too many checkouts this hour. Please try again later." }, 429);
+  }
 
   const ids = [...new Set(itemIds as string[])];
   const amountCents = ids.reduce((sum, id) => sum + CATALOGUE[id].priceUsdCents, 0);
@@ -110,8 +140,9 @@ async function createOrder(req: Request, itemIds: unknown): Promise<Response> {
     return json({ error: "PayPal could not start this order. Please try again." }, 502);
   }
 
-  const { error } = await serviceClient().from("shop_orders").insert({
+  const { error } = await db.from("shop_orders").insert({
     paypal_order_id: order.id,
+    user_id: userId,
     item_ids: ids,
     amount_cents: amountCents,
     currency: "USD",
@@ -122,75 +153,100 @@ async function createOrder(req: Request, itemIds: unknown): Promise<Response> {
   return json({ orderId: order.id, approveUrl });
 }
 
-async function captureOrder(orderId: unknown): Promise<Response> {
+async function captureOrder(db: SupabaseClient, userId: string, orderId: unknown): Promise<Response> {
   if (typeof orderId !== "string" || !ORDER_ID_PATTERN.test(orderId)) {
     return json({ error: "That payment reference is not valid." }, 400);
   }
 
-  const db = serviceClient();
-  const { data: order, error: lookupError } = await db
+  const leaseCutoff = new Date(Date.now() - CAPTURE_LEASE_MS).toISOString();
+  const { data: claimed, error: claimError } = await db
     .from("shop_orders")
-    .select("item_ids, amount_cents, currency, status")
+    .update({ status: "capturing", updated_at: new Date().toISOString() })
     .eq("paypal_order_id", orderId)
+    .eq("user_id", userId)
+    .or(`status.eq.created,and(status.eq.capturing,updated_at.lt.${leaseCutoff})`)
+    .select("paypal_order_id, item_ids, amount_cents, currency, status")
     .maybeSingle();
-  if (lookupError) throw lookupError;
-  if (!order) return json({ error: "We could not find this order." }, 404);
+  if (claimError) throw claimError;
 
-  if (order.status === "completed") {
-    return json({ status: "completed", orderId, itemIds: order.item_ids, amountCents: order.amount_cents });
-  }
-  if (order.status !== "created") {
+  if (!claimed) {
+    const { data: order, error: lookupError } = await db
+      .from("shop_orders")
+      .select("paypal_order_id, item_ids, amount_cents, currency, status")
+      .eq("paypal_order_id", orderId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (lookupError) throw lookupError;
+    if (!order) return json({ error: "We could not find this order." }, 404);
+    if (order.status === "completed") {
+      return json({ status: "completed", orderId, itemIds: order.item_ids, amountCents: order.amount_cents });
+    }
+    if (order.status === "capturing") {
+      return json({ status: "pending", orderId, message: "Your payment is still being confirmed. Please try again in a moment." });
+    }
     return json({ status: order.status, orderId, message: "This order can no longer be paid." });
   }
 
+  const order = claimed as OrderRow;
   const accessToken = await getAccessToken();
   const captureResponse = await fetch(`${PAYPAL_API}/v2/checkout/orders/${orderId}/capture`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
-      "PayPal-Request-Id": crypto.randomUUID(),
+      "PayPal-Request-Id": `capture-${orderId}`,
     },
   });
-  const capture = await captureResponse.json().catch(() => null);
-  const captured = capture?.purchase_units?.[0]?.payments?.captures?.[0];
-  const capturedCents = valueToCents(captured?.amount?.value);
+  let body: PaypalOrderBody | null = await captureResponse.json().catch(() => null);
+  if (!captureResponse.ok) {
+    body = await fetchPaypalOrder(accessToken, orderId);
+  }
 
-  const verified =
-    captureResponse.ok &&
-    capture?.status === "COMPLETED" &&
-    captured?.status === "COMPLETED" &&
-    captured?.amount?.currency_code === order.currency &&
-    capturedCents === order.amount_cents;
+  const { verified, captureId, capturePending } = verifyPayment(body, {
+    amountCents: order.amount_cents,
+    currency: order.currency,
+  });
+  const stillPayable = body?.status === "APPROVED" || body?.status === "CREATED";
 
-  const nextStatus = verified ? "completed" : "failed";
+  if (!verified && capturePending) {
+    return json({ status: "pending", orderId, message: "Your payment is still being confirmed. Please try again in a moment." });
+  }
+
   const { error: updateError } = await db
     .from("shop_orders")
     .update({
-      status: nextStatus,
-      paypal_capture_id: typeof captured?.id === "string" ? captured.id : null,
+      status: verified ? "completed" : stillPayable ? "created" : "failed",
+      paypal_capture_id: captureId,
       updated_at: new Date().toISOString(),
     })
     .eq("paypal_order_id", orderId)
-    .eq("status", "created");
+    .eq("user_id", userId)
+    .eq("status", "capturing");
   if (updateError) throw updateError;
 
   if (!verified) {
-    return json({ status: "failed", orderId, message: "PayPal did not confirm this payment, so nothing was recorded." });
+    const message = stillPayable
+      ? "Payment was not completed. You can try again."
+      : "PayPal did not confirm this payment, so nothing was recorded.";
+    return json({ status: "failed", orderId, message });
   }
   return json({ status: "completed", orderId, itemIds: order.item_ids, amountCents: order.amount_cents });
 }
 
-async function cancelOrder(orderId: unknown): Promise<Response> {
+async function cancelOrder(db: SupabaseClient, userId: string, orderId: unknown): Promise<Response> {
   if (typeof orderId !== "string" || !ORDER_ID_PATTERN.test(orderId)) {
     return json({ error: "That payment reference is not valid." }, 400);
   }
-  const { error } = await serviceClient()
+  const { data, error } = await db
     .from("shop_orders")
     .update({ status: "cancelled", updated_at: new Date().toISOString() })
     .eq("paypal_order_id", orderId)
-    .eq("status", "created");
+    .eq("user_id", userId)
+    .eq("status", "created")
+    .select("paypal_order_id")
+    .maybeSingle();
   if (error) throw error;
+  if (!data) return json({ error: "We could not find this order." }, 404);
   return json({ status: "cancelled", orderId });
 }
 
@@ -200,19 +256,23 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const body = await req.json();
+    const db = adminClient();
+    const userId = await authenticate(req, db);
+    if (!userId) return json({ error: "Sign in to continue checkout." }, 401);
+
+    const body = await req.json().catch(() => null);
     switch (body?.action) {
       case "create":
-        return await createOrder(req, body.itemIds);
+        return await createOrder(req, db, userId, body.itemIds);
       case "capture":
-        return await captureOrder(body.orderId);
+        return await captureOrder(db, userId, body.orderId);
       case "cancel":
-        return await cancelOrder(body.orderId);
+        return await cancelOrder(db, userId, body.orderId);
       default:
         return json({ error: "Unknown checkout action." }, 400);
     }
   } catch (err) {
-    console.error("paypal-checkout failed", err);
+    console.error("paypal-checkout failed", err instanceof Error ? err.message : "unknown error");
     return json({ error: "Something went wrong with the payment service. Please try again." }, 500);
   }
 });
