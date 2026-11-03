@@ -5,6 +5,7 @@ import type { PageId } from '@/components/layout/BottomNav';
 import { BudgetSummary } from '@/components/budget/BudgetSummary';
 import { budgetTone } from '@/components/budget/budgetTone';
 import { QuickActions } from '@/components/dashboard/QuickActions';
+import { RecentExpenses } from '@/components/dashboard/RecentExpenses';
 import { StreakWeek } from '@/components/dashboard/StreakWeek';
 import { MonsterStage } from '@/components/monsters/MonsterStage';
 import { Button } from '@/components/ui/Button';
@@ -193,6 +194,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           </ul>
         </section>
       </div>
+
+      <RecentExpenses expenses={state.expenses} today={today} onViewAll={() => onNavigate('expenses')} />
 
       <div className="grid gap-6 lg:grid-cols-12">
         <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 p-6 text-night-950 shadow-glow-amber sm:p-8 lg:col-span-7">

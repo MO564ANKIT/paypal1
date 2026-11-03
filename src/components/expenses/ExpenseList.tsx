@@ -12,7 +12,7 @@ interface ExpenseListProps {
   onDelete: (expense: Expense) => void;
 }
 
-function dayHeading(date: string, today: string): string {
+export function dayHeading(date: string, today: string): string {
   if (date === today) return 'Today';
   if (date === shiftDateKey(today, -1)) return 'Yesterday';
   return formatDayLabel(date);
