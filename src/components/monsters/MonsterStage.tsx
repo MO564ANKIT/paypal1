@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { MonsterArt } from '@/components/monsters/MonsterArt';
+import { MonsterImage } from '@/components/monsters/MonsterImage';
 import type { Stage } from '@/lib/monsters';
 import { cn } from '@/lib/cn';
 import type { MonsterId } from '@/types';
@@ -86,7 +86,7 @@ export function MonsterStage({ monsterId, level, stage, locked = false, size = '
           animate={{ scale: 1, rotate: 0 }}
           transition={{ type: 'spring', stiffness: 260, damping: 14 }}
         >
-          <MonsterArt id={monsterId} stage={stage} locked={locked} className="h-full w-full" />
+          <MonsterImage monsterId={monsterId} stage={stage} locked={locked} className="h-full w-full" />
         </motion.div>
       </motion.div>
 
