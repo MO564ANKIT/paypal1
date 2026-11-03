@@ -5,11 +5,10 @@ import { MonsterStage } from '@/components/monsters/MonsterStage';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { ProgressBar } from '@/components/ui/ProgressBar';
-import { MONSTER_SPECIES, getLevelProgress, stageName, type MonsterSpecies, type Stage } from '@/lib/monsters';
+import { MONSTER_SPECIES, STAGE_START_LEVELS, getLevelProgress, stageName, type MonsterSpecies, type Stage } from '@/lib/monsters';
 import type { MonsterProgress, MonsterId } from '@/types';
 import { useGame } from '@/state/gameContext';
 
-const STAGE_LEVELS: Record<Stage, number> = { 1: 1, 2: 10, 3: 20 };
 const STAGES: Stage[] = [1, 2, 3];
 
 export function MonstersPage() {
@@ -88,8 +87,11 @@ function MonsterDetail({ species, progress, isFeatured, onFeature }: MonsterDeta
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col items-center gap-4 sm:flex-row">
-        <MonsterStage monsterId={species.id} level={info.level} stage={info.stage} locked={!unlocked} size="md" />
+      <div
+        className="flex flex-col items-center gap-4 rounded-2xl p-4 sm:flex-row"
+        style={{ backgroundImage: `radial-gradient(circle at 30% 50%, ${species.color}33, transparent 70%)` }}
+      >
+        <MonsterStage monsterId={species.id} level={info.level} stage={info.stage} locked={!unlocked} size="lg" />
         <div className="flex-1 space-y-3 text-center sm:text-left">
           <RarityBadge rarity={species.rarity} />
           <p className="text-sm text-ink-200">
@@ -126,7 +128,7 @@ function MonsterDetail({ species, progress, isFeatured, onFeature }: MonsterDeta
                   {reached ? <Check className="h-4 w-4 text-neon-300" /> : <Lock className="h-3.5 w-3.5" />}
                 </div>
                 <p className="mt-2 font-bold text-ink-50">{species.stageNames[stage - 1]}</p>
-                <p className="mt-1 text-xs text-ink-300">{reached ? 'Unlocked' : `Reach level ${STAGE_LEVELS[stage]}`}</p>
+                <p className="mt-1 text-xs text-ink-300">{reached ? 'Unlocked' : `Reach level ${STAGE_START_LEVELS[stage]}`}</p>
               </li>
             );
           })}

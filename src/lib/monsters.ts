@@ -146,9 +146,11 @@ export function getLevelProgress(xp: number): LevelProgress {
   };
 }
 
+export const STAGE_START_LEVELS: Record<Stage, number> = { 1: 1, 2: 10, 3: 20 };
+
 export function stageFromLevel(level: number): Stage {
-  if (level >= 20) return 3;
-  if (level >= 10) return 2;
+  if (level >= STAGE_START_LEVELS[3]) return 3;
+  if (level >= STAGE_START_LEVELS[2]) return 2;
   return 1;
 }
 

@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { PawPrint, Receipt, Scroll, ShoppingBag, type LucideIcon } from 'lucide-react';
+import { Flame, PawPrint, Receipt, Scroll, ShoppingBag, type LucideIcon } from 'lucide-react';
 import type { PageId } from '@/components/layout/BottomNav';
 
 interface ActionDef {
@@ -16,6 +16,7 @@ const ACTIONS: ActionDef[] = [
   { id: 'quests', label: 'Quests', icon: Scroll, ring: 'border-amber-400', hover: 'group-hover:shadow-glow-amber', text: 'text-amber-300' },
   { id: 'monsters', label: 'Monsters', icon: PawPrint, ring: 'border-rose-400', hover: 'group-hover:shadow-glow-rose', text: 'text-rose-300' },
   { id: 'shop', label: 'Loot Shop', icon: ShoppingBag, ring: 'border-volt-400', hover: 'group-hover:shadow-glow-volt', text: 'text-volt-300' },
+  { id: 'roast', label: 'AI Roast', icon: Flame, ring: 'border-lime-400', hover: 'group-hover:shadow-glow-neon', text: 'text-lime-300' },
 ];
 
 interface QuickActionsProps {
@@ -24,7 +25,7 @@ interface QuickActionsProps {
 
 export function QuickActions({ onNavigate }: QuickActionsProps) {
   return (
-    <ul className="grid grid-cols-4 gap-3 sm:gap-6">
+    <ul className="grid grid-cols-5 gap-2 sm:gap-6">
       {ACTIONS.map((action, index) => {
         const Icon = action.icon;
         return (
@@ -40,11 +41,11 @@ export function QuickActions({ onNavigate }: QuickActionsProps) {
               className="group flex flex-col items-center gap-2.5 focus-visible:outline-none"
             >
               <span
-                className={`flex h-16 w-16 items-center justify-center rounded-full border-2 bg-night-900 transition duration-300 group-focus-visible:ring-2 group-focus-visible:ring-neon-400 sm:h-20 sm:w-20 ${action.ring} ${action.hover} ${action.text}`}
+                className={`flex h-14 w-14 items-center justify-center rounded-full border-2 bg-night-900 transition duration-300 group-focus-visible:ring-2 group-focus-visible:ring-neon-400 sm:h-20 sm:w-20 ${action.ring} ${action.hover} ${action.text}`}
               >
-                <Icon className="h-7 w-7 sm:h-8 sm:w-8" aria-hidden="true" />
+                <Icon className="h-6 w-6 sm:h-8 sm:w-8" aria-hidden="true" />
               </span>
-              <span className="text-center text-[11px] font-bold uppercase tracking-wider text-ink-200 sm:text-xs">
+              <span className="text-center text-[10px] font-bold uppercase tracking-wider text-ink-200 sm:text-xs">
                 {action.label}
               </span>
             </motion.button>

@@ -87,6 +87,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
             <div className="my-4">
               <MonsterStage monsterId={featured.id} level={featuredProgress.level} stage={featuredProgress.stage} size="lg" />
             </div>
+            <div className="relative max-w-xs rounded-2xl border border-white/10 bg-night-950/70 px-4 py-3 text-sm italic leading-relaxed text-ink-100">
+              <p>&ldquo;{featured.personality}&rdquo;</p>
+              <span aria-hidden className="absolute -top-2 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 border-l border-t border-white/10 bg-night-950" />
+            </div>
             <h2 className="text-2xl font-bold text-ink-50">{featured.name}</h2>
             <p className="mt-1 text-sm text-ink-300">
               Level {featuredProgress.level} · {stageName(featured.id, featuredProgress.stage)}
