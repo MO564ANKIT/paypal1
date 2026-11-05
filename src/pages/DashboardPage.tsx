@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { useMemo, useRef } from 'react';
+import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { ArrowRight, PawPrint, Scroll, Sparkles, Trophy, Wallet } from 'lucide-react';
 import type { PageId } from '@/components/layout/BottomNav';
 import { BudgetSummary } from '@/components/budget/BudgetSummary';
@@ -11,6 +11,7 @@ import { MonsterStage } from '@/components/monsters/MonsterStage';
 import { Button } from '@/components/ui/Button';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { ProgressRing } from '@/components/ui/ProgressRing';
+import { StaggerItem } from '@/components/ui/Stagger';
 import { ACHIEVEMENTS } from '@/lib/achievements';
 import { formatMoney } from '@/lib/money';
 import { formatMonthLabel, daysLeftInMonth, monthKeyOf } from '@/lib/dates';
@@ -18,6 +19,7 @@ import { summarizeMonth } from '@/lib/finance';
 import { getLevelProgress, getSpecies, stageName } from '@/lib/monsters';
 import { computeStreak } from '@/lib/progress';
 import { QUESTS, countQuestProgress, questRecordKey } from '@/lib/quests';
+import { useCountUp } from '@/lib/useCountUp';
 import { useGame } from '@/state/gameContext';
 
 interface DashboardPageProps {
@@ -43,6 +45,19 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     .flatMap(([id]) => ACHIEVEMENTS.filter((achievement) => achievement.id === id));
   const daysLeft = daysLeftInMonth(today);
   const over = summary.remainingPaise !== null && summary.remainingPaise < 0;
+  const animatedRemaining = useCountUp(summary.remainingPaise ?? 0);
+  const featuredCardRef = useRef<HTMLDivElement>(null);
+  const glowX = useSpring(useMotionValue(50), { stiffness: 120, damping: 20 });
+  const glowY = useSpring(useMotionValue(40), { stiffness: 120, damping: 20 });
+  const glowBg = useTransform(
+    [glowX, glowY] as const,
+    ([x, y]) => `radial-gradient(280px circle at ${x}% ${y}%, ${featured.color}40, transparent 70%)`,
+  );
+  const handleFeaturedMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    glowX.set(((e.clientX - rect.left) / rect.width) * 100);
+    glowY.set(((e.clientY - rect.top) / rect.height) * 100);
+  };
 
   return (
     <div className="space-y-6">
@@ -66,24 +81,28 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
               summary.remainingPaise === null ? 'text-ink-300' : over ? 'text-rose-300' : 'text-amber-300'
             }`}
           >
-            {summary.remainingPaise === null ? 'Not set' : formatMoney(summary.remainingPaise)}
+            {summary.remainingPaise === null ? 'Not set' : formatMoney(Math.round(animatedRemaining))}
           </p>
         </div>
       </header>
 
-      <section className="card px-4 py-8 sm:px-8">
-        <QuickActions onNavigate={onNavigate} />
-      </section>
+      <StaggerItem index={0}>
+        <section className="card px-4 py-8 sm:px-8">
+          <QuickActions onNavigate={onNavigate} />
+        </section>
+      </StaggerItem>
 
       <div className="grid gap-6 lg:grid-cols-12">
-        <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="card p-6 sm:p-8 lg:col-span-4">
-          <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
-            <div
-              className="absolute inset-0 opacity-60"
-              style={{ background: `radial-gradient(circle at 50% 35%, ${featured.color}33, transparent 65%)` }}
-            />
-          </div>
-          <div className="relative flex flex-col items-center text-center">
+        <StaggerItem index={1} className="lg:col-span-4">
+          <motion.section
+            ref={featuredCardRef}
+            onMouseMove={handleFeaturedMouseMove}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="card relative h-full overflow-hidden p-6 sm:p-8"
+          >
+            <motion.div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: glowBg }} />
+            <div className="relative flex flex-col items-center text-center">
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-ink-400">Featured monster</p>
             <div className="my-4">
               <MonsterStage monsterId={featured.id} level={featuredProgress.level} stage={featuredProgress.stage} size="lg" />
@@ -111,9 +130,11 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
               <PawPrint className="h-4 w-4" /> View collection
             </Button>
           </div>
-        </motion.section>
+          </motion.section>
+        </StaggerItem>
 
-        <section className="card p-6 sm:p-8 lg:col-span-8">
+        <StaggerItem index={2} className="lg:col-span-8">
+        <section className="card h-full p-6 sm:p-8">
           <div className="mb-6 flex items-start justify-between gap-4">
             <div>
               <h2 className="flex items-center gap-2 text-lg font-bold text-ink-50">
@@ -135,6 +156,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           </div>
           <BudgetSummary summary={summary} />
         </section>
+        </StaggerItem>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-12">
